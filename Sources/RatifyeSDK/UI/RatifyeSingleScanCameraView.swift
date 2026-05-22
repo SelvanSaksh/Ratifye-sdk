@@ -66,29 +66,50 @@ public final class RatifyeSingleScanCameraView: UIView {
 
     public override func layoutSubviews() {
         super.layoutSubviews()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
         previewLayer.frame = bounds
+        CATransaction.commit()
+        if window != nil, bounds.width > 1, bounds.height > 1 {
+            ensureCameraRunning()
+        }
     }
 
     public override func didMoveToWindow() {
         super.didMoveToWindow()
         if window != nil {
-            startCameraIfEnabled()
+            ensureCameraRunning()
         } else {
             engine.stopRunning()
         }
     }
 
     public func startCameraIfEnabled() {
+        ensureCameraRunning()
+    }
+
+    private func ensureCameraRunning() {
+        guard window != nil, bounds.width > 1, bounds.height > 1 else { return }
         guard featureConfiguration.isScanningEnabled else {
             engine.stopRunning()
             return
         }
-        do {
-            try engine.configureIfNeeded()
-            engine.startRunning()
-            updateFlashControl()
-        } catch {
-            delegate?.ratifyeSingleScanCameraView(self, cameraDidFail: error)
+
+        RatifyeCameraPermission.requestVideoAccess { [weak self] granted in
+            guard let self else { return }
+            guard granted else {
+                self.delegate?.ratifyeSingleScanCameraView(self, cameraDidFail: RatifyeCameraPermissionError.denied)
+                return
+            }
+            do {
+                try self.engine.configureIfNeeded()
+                self.engine.attachPreview(to: self.previewLayer)
+                self.engine.refreshPreviewConnection(for: self.previewLayer)
+                self.engine.startRunning()
+                self.updateFlashControl()
+            } catch {
+                self.delegate?.ratifyeSingleScanCameraView(self, cameraDidFail: error)
+            }
         }
     }
 

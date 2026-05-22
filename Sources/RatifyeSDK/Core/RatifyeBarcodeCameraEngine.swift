@@ -70,8 +70,25 @@ public final class RatifyeBarcodeCameraEngine: NSObject {
         guard !session.isRunning else { return }
         isSingleFinished = false
         lastEmittedAt.removeAll()
-        DispatchQueue.global(qos: .userInitiated).async { [session] in
-            session.startRunning()
+        let captureSession = session
+        if Thread.isMainThread {
+            DispatchQueue.global(qos: .userInitiated).async {
+                captureSession.startRunning()
+            }
+        } else {
+            captureSession.startRunning()
+        }
+    }
+
+    public func refreshPreviewConnection(for previewLayer: AVCaptureVideoPreviewLayer) {
+        previewLayer.session = session
+        guard let connection = previewLayer.connection else { return }
+        if #available(iOS 17.0, *) {
+            if connection.isVideoRotationAngleSupported(90) {
+                connection.videoRotationAngle = 90
+            }
+        } else if connection.isVideoOrientationSupported {
+            connection.videoOrientation = .portrait
         }
     }
 

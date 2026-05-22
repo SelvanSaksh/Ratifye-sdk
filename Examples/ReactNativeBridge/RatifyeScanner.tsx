@@ -97,5 +97,6 @@ export function RatifyeMultiScanCamera(props: {
 }
 
 const styles = StyleSheet.create({
-  camera: { flex: 1 },
+  /** Parent screen must also use flex:1 or the native preview stays 0×0 (black). */
+  camera: { flex: 1, minHeight: 200 },
 });

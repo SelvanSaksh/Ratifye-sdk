@@ -40,6 +40,18 @@ final class RatifyeMultiScanNativeView: UIView, RatifyeMultiScanCameraViewDelega
             multiScanEnabled: multiScanEnabled,
             auth: RatifyeRNAuthConfiguration.authFeature(authScanEnabled: authScanEnabled)
         )
+        if window != nil {
+            setNeedsLayout()
+            layoutIfNeeded()
+            cameraView.startCameraIfEnabled()
+        }
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        if window != nil, bounds.width > 1, bounds.height > 1 {
+            cameraView.startCameraIfEnabled()
+        }
     }
 
     func ratifyeMultiScanCameraView(_ view: RatifyeMultiScanCameraView, didEmit event: RatifyeScanEventPayload) {

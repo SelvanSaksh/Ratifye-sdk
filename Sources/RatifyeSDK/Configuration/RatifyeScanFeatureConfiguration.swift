@@ -75,6 +75,6 @@ public struct RatifyeMultiScanFeatureConfiguration: Sendable {
     public var usesAuthFlow: Bool { auth.usesAuthFlow }
 
     public var isScanningEnabled: Bool {
-        multiScanEnabled
+        multiScanEnabled || usesAuthFlow
     }
 }

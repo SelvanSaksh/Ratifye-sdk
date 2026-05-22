@@ -40,6 +40,18 @@ final class RatifyeSingleScanNativeView: UIView, RatifyeSingleScanCameraViewDele
             singleScanEnabled: singleScanEnabled,
             auth: RatifyeRNAuthConfiguration.authFeature(authScanEnabled: authScanEnabled)
         )
+        if window != nil {
+            setNeedsLayout()
+            layoutIfNeeded()
+            cameraView.startCameraIfEnabled()
+        }
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        if window != nil, bounds.width > 1, bounds.height > 1 {
+            cameraView.startCameraIfEnabled()
+        }
     }
 
     func ratifyeSingleScanCameraView(_ view: RatifyeSingleScanCameraView, didEmit event: RatifyeScanEventPayload) {
