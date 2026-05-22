@@ -42,13 +42,15 @@ cameraView.featureConfiguration = RatifyeScanFeatureConfiguration(
     singleScanEnabled: true,
     authScanEnabled: true,
     authConfiguration: RatifyeAuthConfiguration(
-        bearerToken: token,
-        ingestURL: URL(string: "https://api.example.com/v1/scans")!
+        bearerToken: session.accessToken,
+        ingestURL: URL(string: appConfig.scanAuthURL)!,
+        companyId: session.companyId,
+        ingestFormat: .authBc
     )
 )
 ```
 
-When `authScanEnabled` and `ingestURL` are set, **auth ingest runs** (SDK `POST`). Otherwise, if `singleScanEnabled`, plain barcode events are emitted.
+Auth ingest runs only when `authScanEnabled`, `ingestURL`, and (for `auth_bc`) `companyId` are all provided by your app. The SDK does not embed API URLs.
 
 ### Event payload (auth + parsing)
 
@@ -59,13 +61,23 @@ All flows use `RatifyeScanEventPayload.toDictionary()`:
 - `payload`, `symbologyRaw`, `scan`
 - `auth` (authenticated flows): `httpStatus`, `responseBody`, `responseJSON` (parsed when valid JSON), `errorCode`, `errorMessage` on failure
 
-Authenticated ingest `POST` body:
+Authenticated ingest (`ingestFormat: auth_bc`) — body built from the scan + app-supplied `companyId`:
 
 ```json
-{ "payload": "<string>", "symbologyRaw": "<Vision symbology string>" }
+[
+  {
+    "encrypted_text": "<extracted from (98)…(97) in barcode, or full payload>",
+    "barcode_data": "<full scanned string>",
+    "company_id": "<from app>"
+  }
+]
 ```
 
-Headers: `Authorization: Bearer …`, `X-API-Key`, plus `extraHTTPHeaders`.
+`ingestURL` must be the full URL from your environment or backend config.
+
+Legacy format (`ingestFormat: legacy`): `{ "payload", "symbologyRaw" }`.
+
+Headers: `Content-Type: application/json`, `Accept: application/json, text/plain, */*`, optional `Authorization` / `X-API-Key`, plus `extraHTTPHeaders`.
 
 ### Swift (UIKit page)
 
@@ -129,21 +141,24 @@ Copy into your iOS app target:
 - `RatifyeRNAuthConfiguration.swift`
 - `RatifyeScanner.tsx` (into your JS app)
 
-**Single camera props:** `singleScanEnabled`, `authScanEnabled`, `ingestURL`, `bearerToken`, `apiKey`, `extraHTTPHeaders`
+**Single camera props:** `singleScanEnabled`, `authScanEnabled`, `ingestURL`, `companyId`, `ingestFormat`, `bearerToken`, `apiKey`, `extraHTTPHeaders`
 
-**Multi camera props:** `multiScanEnabled`, `authScanEnabled`, `ingestURL`, `bearerToken`, `apiKey`, `extraHTTPHeaders` (same auth API as single)
+**Multi camera props:** `multiScanEnabled`, `authScanEnabled`, `ingestURL`, `companyId`, `ingestFormat`, `bearerToken`, `apiKey`, `extraHTTPHeaders` (same auth API as single)
 
 **Event:** `onScanEvent` → same shape as `RatifyeScanEventPayload` (`kind`, `payload`, `symbologyRaw`, `auth.responseJSON`, etc.)
 
 ```tsx
+import Config from 'react-native-config'; // or your env / API layer
 import { RatifyeSingleScanCamera } from './RatifyeScanner';
 
 <RatifyeSingleScanCamera
   style={{ flex: 1 }}
   singleScanEnabled={!useAuth}
   authScanEnabled={useAuth}
-  ingestURL="https://api.example.com/v1/scans"
-  bearerToken={token}
+  ingestURL={Config.SCAN_AUTH_URL}
+  companyId={session.companyId}
+  ingestFormat="auth_bc"
+  bearerToken={session.accessToken}
   onScanEvent={(event) => {
     if (event.kind === 'auth_success' || event.kind === 'single') {
       setSheetVisible(true);
@@ -151,6 +166,8 @@ import { RatifyeSingleScanCamera } from './RatifyeScanner';
   }}
 />
 ```
+
+Never hardcode production API URLs in the SDK or sample components — pass them from your app at runtime.
 
 Show results in **your** `Modal` / bottom sheet — the SDK camera stays on the page.
 

@@ -1,11 +1,9 @@
-import React, { useCallback, useState } from 'react';
+import React from 'react';
 import {
-  Modal,
   NativeSyntheticEvent,
-  StyleSheet,
-  Text,
-  View,
   requireNativeComponent,
+  StyleSheet,
+  ViewStyle,
 } from 'react-native';
 
 export type RatifyeScanSurface = 'single' | 'multi';
@@ -17,12 +15,19 @@ export type RatifyeScanEventKind =
   | 'multi'
   | 'camera_error';
 
-/** Auth props shared by single- and multi-scan cameras. */
+/**
+ * Auth configuration — every value comes from your app (env, API, session).
+ * Do not hardcode URLs or company IDs in the SDK; pass them here at runtime.
+ */
 export type RatifyeAuthScanProps = {
   authScanEnabled?: boolean;
+  /** From app config, e.g. Config.SCAN_AUTH_URL or login response */
   ingestURL?: string;
   bearerToken?: string;
   apiKey?: string;
+  /** From app session / tenant, e.g. user.companyId */
+  companyId?: string;
+  ingestFormat?: 'auth_bc' | 'authBc' | 'legacy';
   extraHTTPHeaders?: Record<string, string>;
 };
 
@@ -45,13 +50,13 @@ export type RatifyeScanEvent = {
 };
 
 type NativeSingleProps = RatifyeAuthScanProps & {
-  style?: object;
+  style?: ViewStyle;
   singleScanEnabled?: boolean;
   onScanEvent?: (event: NativeSyntheticEvent<RatifyeScanEvent>) => void;
 };
 
 type NativeMultiProps = RatifyeAuthScanProps & {
-  style?: object;
+  style?: ViewStyle;
   multiScanEnabled?: boolean;
   onScanEvent?: (event: NativeSyntheticEvent<RatifyeScanEvent>) => void;
 };
@@ -62,137 +67,58 @@ const RatifyeSingleScanViewNative =
 const RatifyeMultiScanViewNative =
   requireNativeComponent<NativeMultiProps>('RatifyeMultiScanView');
 
-/** Page-embedded single camera (plain and/or authenticated ingest). */
+function nativeAuthProps(auth: RatifyeAuthScanProps): Partial<RatifyeAuthScanProps> {
+  const out: Partial<RatifyeAuthScanProps> = {};
+  if (auth.authScanEnabled !== undefined) out.authScanEnabled = auth.authScanEnabled;
+  if (auth.ingestURL !== undefined) out.ingestURL = auth.ingestURL;
+  if (auth.bearerToken !== undefined) out.bearerToken = auth.bearerToken;
+  if (auth.apiKey !== undefined) out.apiKey = auth.apiKey;
+  if (auth.companyId !== undefined) out.companyId = auth.companyId;
+  if (auth.ingestFormat !== undefined) out.ingestFormat = auth.ingestFormat;
+  if (auth.extraHTTPHeaders !== undefined) out.extraHTTPHeaders = auth.extraHTTPHeaders;
+  return out;
+}
+
+/** Page-embedded single camera. Pass auth URL/token/companyId from your app config only. */
 export function RatifyeSingleScanCamera(
   props: RatifyeAuthScanProps & {
     singleScanEnabled?: boolean;
     onScanEvent: (event: RatifyeScanEvent) => void;
-    style?: object;
+    style?: ViewStyle;
   }
 ) {
-  const {
-    singleScanEnabled = true,
-    authScanEnabled = false,
-    ingestURL,
-    bearerToken,
-    apiKey,
-    extraHTTPHeaders,
-    onScanEvent,
-    style,
-  } = props;
+  const { singleScanEnabled, onScanEvent, style, ...auth } = props;
 
   return (
     <RatifyeSingleScanViewNative
       style={[styles.camera, style]}
       singleScanEnabled={singleScanEnabled}
-      authScanEnabled={authScanEnabled}
-      ingestURL={ingestURL}
-      bearerToken={bearerToken}
-      apiKey={apiKey}
-      extraHTTPHeaders={extraHTTPHeaders}
+      {...nativeAuthProps(auth)}
       onScanEvent={(e) => onScanEvent(e.nativeEvent)}
     />
   );
 }
 
-/** Page-embedded multi camera (plain and/or authenticated ingest per scan). */
+/** Page-embedded multi camera. Same dynamic auth props as single. */
 export function RatifyeMultiScanCamera(
   props: RatifyeAuthScanProps & {
     multiScanEnabled?: boolean;
     onScanEvent: (event: RatifyeScanEvent) => void;
-    style?: object;
+    style?: ViewStyle;
   }
 ) {
-  const {
-    multiScanEnabled = true,
-    authScanEnabled = false,
-    ingestURL,
-    bearerToken,
-    apiKey,
-    extraHTTPHeaders,
-    onScanEvent,
-    style,
-  } = props;
+  const { multiScanEnabled, onScanEvent, style, ...auth } = props;
 
   return (
     <RatifyeMultiScanViewNative
       style={[styles.camera, style]}
       multiScanEnabled={multiScanEnabled}
-      authScanEnabled={authScanEnabled}
-      ingestURL={ingestURL}
-      bearerToken={bearerToken}
-      apiKey={apiKey}
-      extraHTTPHeaders={extraHTTPHeaders}
+      {...nativeAuthProps(auth)}
       onScanEvent={(e) => onScanEvent(e.nativeEvent)}
     />
   );
 }
 
-/**
- * Example: camera on the page; auth works on both surfaces via the same props.
- * When authScanEnabled + ingestURL are set, each scan POSTs to your API and returns auth_success / auth_failure.
- */
-export function RatifyeScannerExampleScreen() {
-  const [useMultiScreen, setUseMultiScreen] = useState(false);
-  const [authScanEnabled, setAuthScanEnabled] = useState(true);
-  const [lastEvent, setLastEvent] = useState<RatifyeScanEvent | null>(null);
-  const [sheetVisible, setSheetVisible] = useState(false);
-
-  const authProps: RatifyeAuthScanProps = {
-    authScanEnabled,
-    ingestURL: authScanEnabled ? 'https://api.example.com/v1/scans' : undefined,
-    bearerToken: authScanEnabled ? 'YOUR_TOKEN' : undefined,
-  };
-
-  const onScanEvent = useCallback((event: RatifyeScanEvent) => {
-    setLastEvent(event);
-    setSheetVisible(true);
-  }, []);
-
-  return (
-    <View style={styles.screen}>
-      {useMultiScreen ? (
-        <RatifyeMultiScanCamera
-          {...authProps}
-          multiScanEnabled
-          onScanEvent={onScanEvent}
-        />
-      ) : (
-        <RatifyeSingleScanCamera
-          {...authProps}
-          singleScanEnabled={!authScanEnabled}
-          onScanEvent={onScanEvent}
-        />
-      )}
-
-      <Modal visible={sheetVisible} animationType="slide" transparent>
-        <View style={styles.sheetBackdrop}>
-          <View style={styles.sheet}>
-            <Text style={styles.sheetTitle}>
-              {lastEvent?.kind} ({lastEvent?.surface})
-            </Text>
-            <Text selectable>{JSON.stringify(lastEvent, null, 2)}</Text>
-          </View>
-        </View>
-      </Modal>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#000' },
   camera: { flex: 1 },
-  sheetBackdrop: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.4)',
-  },
-  sheet: {
-    maxHeight: '50%',
-    backgroundColor: '#fff',
-    padding: 16,
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
-  },
-  sheetTitle: { fontSize: 18, fontWeight: '600', marginBottom: 8 },
 });

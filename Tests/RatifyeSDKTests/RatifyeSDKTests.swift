@@ -3,7 +3,7 @@ import RatifyeSDK
 
 final class RatifyeSDKTests: XCTestCase {
     func testVersion() {
-        XCTAssertEqual(RatifyeSDK.version, "1.1.1")
+        XCTAssertEqual(RatifyeSDK.version, "1.2.1")
     }
 
     func testScanResultEquality() {
@@ -44,6 +44,30 @@ final class RatifyeSDKTests: XCTestCase {
             authConfiguration: RatifyeAuthConfiguration(ingestURL: URL(string: "https://example.com")!)
         )
         XCTAssertTrue(cfg.usesAuthFlow)
+    }
+
+    func testAuthBcEncryptedTextExtraction() {
+        let raw = "chgtfssd(98)ZXRZR3JR2RCWTQ====(97)0"
+        XCTAssertEqual(
+            RatifyeBarcodeParsing.encryptedText(from: raw),
+            "ZXRZR3JR2RCWTQ===="
+        )
+    }
+
+    func testAuthBcRequestBodyShape() throws {
+        let cfg = RatifyeAuthConfiguration(
+            ingestURL: URL(string: "https://api.example.com/scan/auth-bc")!,
+            ingestFormat: .authBc,
+            companyId: "42"
+        )
+        let client = RatifyeScanIngestClient(configuration: cfg)
+        let result = RatifyeScanResult(payload: "chgtfssd(98)ZXRZR3JR2RCWTQ====(97)0", symbologyRaw: "QR")
+        let body = try client.encodedRequestBody(for: result)
+        let json = try JSONSerialization.jsonObject(with: body) as? [[String: String]]
+        XCTAssertEqual(json?.count, 1)
+        XCTAssertEqual(json?.first?["encrypted_text"], "ZXRZR3JR2RCWTQ====")
+        XCTAssertEqual(json?.first?["barcode_data"], result.payload)
+        XCTAssertEqual(json?.first?["company_id"], "42")
     }
 
     func testAuthPayloadIncludesSurface() {

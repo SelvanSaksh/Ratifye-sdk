@@ -26,6 +26,14 @@ final class RatifyeSingleScanNativeView: UIView, RatifyeSingleScanCameraViewDele
         didSet { applyConfiguration() }
     }
 
+    @objc var companyId: NSString? {
+        didSet { applyConfiguration() }
+    }
+
+    @objc var ingestFormat: NSString? {
+        didSet { applyConfiguration() }
+    }
+
     @objc var extraHTTPHeaders: NSDictionary? {
         didSet { applyConfiguration() }
     }
@@ -57,6 +65,8 @@ final class RatifyeSingleScanNativeView: UIView, RatifyeSingleScanCameraViewDele
             ingestURL: ingestURL,
             bearerToken: bearerToken,
             apiKey: apiKey,
+            companyId: companyId,
+            ingestFormat: ingestFormat,
             extraHTTPHeaders: extraHTTPHeaders
         )
         cameraView.featureConfiguration = RatifyeScanFeatureConfiguration(

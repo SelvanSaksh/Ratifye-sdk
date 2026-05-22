@@ -134,6 +134,7 @@ enum RatifyeIngestErrorBridge {
         if let ingest = error as? RatifyeIngestError {
             switch ingest {
             case .missingURL: return "missing_url"
+            case .missingCompanyId: return "missing_company_id"
             case .invalidResponse: return "invalid_response"
             case .httpStatus(let code, _): return "http_\(code)"
             }

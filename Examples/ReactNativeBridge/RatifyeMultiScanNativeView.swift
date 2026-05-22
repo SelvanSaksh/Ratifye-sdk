@@ -26,6 +26,14 @@ final class RatifyeMultiScanNativeView: UIView, RatifyeMultiScanCameraViewDelega
         didSet { applyConfiguration() }
     }
 
+    @objc var companyId: NSString? {
+        didSet { applyConfiguration() }
+    }
+
+    @objc var ingestFormat: NSString? {
+        didSet { applyConfiguration() }
+    }
+
     @objc var extraHTTPHeaders: NSDictionary? {
         didSet { applyConfiguration() }
     }
@@ -57,6 +65,8 @@ final class RatifyeMultiScanNativeView: UIView, RatifyeMultiScanCameraViewDelega
             ingestURL: ingestURL,
             bearerToken: bearerToken,
             apiKey: apiKey,
+            companyId: companyId,
+            ingestFormat: ingestFormat,
             extraHTTPHeaders: extraHTTPHeaders
         )
         cameraView.featureConfiguration = RatifyeMultiScanFeatureConfiguration(

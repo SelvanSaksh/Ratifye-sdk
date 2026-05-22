@@ -14,6 +14,10 @@ public struct RatifyeAuthFeatureConfiguration: Sendable {
     }
 
     public var usesAuthFlow: Bool {
-        authScanEnabled && authConfiguration?.ingestURL != nil
+        guard authScanEnabled,
+              let cfg = authConfiguration,
+              cfg.ingestURL != nil
+        else { return false }
+        return cfg.isAuthBcReady
     }
 }

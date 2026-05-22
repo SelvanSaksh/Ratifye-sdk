@@ -7,6 +7,8 @@ enum RatifyeRNAuthConfiguration {
         ingestURL: NSString?,
         bearerToken: NSString?,
         apiKey: NSString?,
+        companyId: NSString?,
+        ingestFormat: NSString?,
         extraHTTPHeaders: NSDictionary?
     ) -> RatifyeAuthFeatureConfiguration {
         var headers: [String: String] = [:]
@@ -18,13 +20,26 @@ enum RatifyeRNAuthConfiguration {
             }
         }
 
+        let format: RatifyeAuthIngestFormat
+        switch (ingestFormat as String?)?.lowercased() {
+        case "legacy":
+            format = .legacy
+        case "authbc", "auth_bc":
+            format = .authBc
+        default:
+            format = .authBc
+        }
+
         var authConfiguration: RatifyeAuthConfiguration?
-        if let urlString = ingestURL as String?, let url = URL(string: urlString) {
+        if let urlString = ingestURL as String?, !urlString.isEmpty, let url = URL(string: urlString) {
+            let cid = (companyId as String?).flatMap { $0.isEmpty ? nil : $0 }
             authConfiguration = RatifyeAuthConfiguration(
                 bearerToken: bearerToken as String?,
                 apiKey: apiKey as String?,
                 ingestURL: url,
-                extraHTTPHeaders: headers
+                extraHTTPHeaders: headers,
+                ingestFormat: format,
+                companyId: cid
             )
         }
 

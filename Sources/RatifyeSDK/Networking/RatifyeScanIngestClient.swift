@@ -2,8 +2,10 @@ import Foundation
 
 public enum RatifyeIngestError: Error, Sendable {
     case missingURL
+    case missingCompanyId
     case invalidResponse
     case httpStatus(Int, Data?)
+    case bodyEncodingFailed
 }
 
 extension RatifyeIngestError: LocalizedError {
@@ -11,10 +13,14 @@ extension RatifyeIngestError: LocalizedError {
         switch self {
         case .missingURL:
             return "Ingest URL is not configured."
+        case .missingCompanyId:
+            return "company_id is required for auth ingest and must be provided by the app."
         case .invalidResponse:
             return "The server returned an invalid response."
         case .httpStatus(let code, _):
             return "Ingest failed with HTTP status \(code)."
+        case .bodyEncodingFailed:
+            return "Failed to encode the ingest request body."
         }
     }
 }
@@ -35,6 +41,7 @@ public struct RatifyeScanIngestClient: Sendable {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        applyDefaultHeaders(to: &request)
 
         if let token = configuration.bearerToken {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
@@ -46,11 +53,7 @@ public struct RatifyeScanIngestClient: Sendable {
             request.setValue(v, forHTTPHeaderField: k)
         }
 
-        let body: [String: String] = [
-            "payload": result.payload,
-            "symbologyRaw": result.symbologyRaw
-        ]
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        request.httpBody = try makeRequestBody(for: result)
 
         let (data, response) = try await urlSession.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw RatifyeIngestError.invalidResponse }
@@ -58,5 +61,47 @@ public struct RatifyeScanIngestClient: Sendable {
             throw RatifyeIngestError.httpStatus(http.statusCode, data)
         }
         return (http.statusCode, data)
+    }
+
+    private func applyDefaultHeaders(to request: inout URLRequest) {
+        if configuration.ingestFormat == .authBc {
+            if request.value(forHTTPHeaderField: "Accept") == nil {
+                request.setValue("application/json, text/plain, */*", forHTTPHeaderField: "Accept")
+            }
+        }
+    }
+
+    /// Encodes the request body for the configured ingest format (for tests and debugging).
+    public func encodedRequestBody(for result: RatifyeScanResult) throws -> Data {
+        try makeRequestBody(for: result)
+    }
+
+    private func makeRequestBody(for result: RatifyeScanResult) throws -> Data {
+        switch configuration.ingestFormat {
+        case .legacy:
+            let body: [String: String] = [
+                "payload": result.payload,
+                "symbologyRaw": result.symbologyRaw
+            ]
+            guard let data = try? JSONSerialization.data(withJSONObject: body) else {
+                throw RatifyeIngestError.bodyEncodingFailed
+            }
+            return data
+
+        case .authBc:
+            guard let companyId = configuration.companyId, !companyId.isEmpty else {
+                throw RatifyeIngestError.missingCompanyId
+            }
+            let barcodeData = result.payload
+            let item: [String: String] = [
+                "encrypted_text": RatifyeBarcodeParsing.encryptedText(from: barcodeData),
+                "barcode_data": barcodeData,
+                "company_id": companyId
+            ]
+            guard let data = try? JSONSerialization.data(withJSONObject: [item]) else {
+                throw RatifyeIngestError.bodyEncodingFailed
+            }
+            return data
+        }
     }
 }
