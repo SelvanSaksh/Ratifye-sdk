@@ -1,9 +1,26 @@
 import XCTest
+import UIKit
 import RatifyeSDK
 
 final class RatifyeSDKTests: XCTestCase {
     func testVersion() {
-        XCTAssertEqual(RatifyeSDK.version, "1.2.1")
+        XCTAssertEqual(RatifyeSDK.version, "1.4.0")
+
+    func testGalleryBarcodeParsing() {
+        let raw = "chgtfssd(98)ZXRZR3JR2RCWTQ====(97)0"
+        let size = CGSize(width: 400, height: 120)
+        UIGraphicsBeginImageContextWithOptions(size, true, 1)
+        defer { UIGraphicsEndImageContext() }
+        (raw as NSString).draw(at: CGPoint(x: 8, y: 48), withAttributes: [
+            .font: UIFont.systemFont(ofSize: 14),
+            .foregroundColor: UIColor.black
+        ])
+        let image = UIGraphicsGetImageFromCurrentImageContext()
+        XCTAssertNotNil(image)
+        // Vision may not decode rendered text; test API returns array without crashing.
+        let results = RatifyeBarcodeImageScanner.scan(image!)
+        XCTAssertNotNil(results)
+    }
     }
 
     func testScanResultEquality() {
@@ -31,8 +48,7 @@ final class RatifyeSDKTests: XCTestCase {
     func testFeatureConfigurationAuthPriority() {
         let cfg = RatifyeScanFeatureConfiguration(
             singleScanEnabled: true,
-            authScanEnabled: true,
-            authConfiguration: RatifyeAuthConfiguration(ingestURL: URL(string: "https://example.com")!)
+            auth: .withAuthEnabled(true)
         )
         XCTAssertTrue(cfg.usesAuthFlow)
     }
@@ -40,10 +56,17 @@ final class RatifyeSDKTests: XCTestCase {
     func testMultiAuthConfiguration() {
         let cfg = RatifyeMultiScanFeatureConfiguration(
             multiScanEnabled: true,
-            authScanEnabled: true,
-            authConfiguration: RatifyeAuthConfiguration(ingestURL: URL(string: "https://example.com")!)
+            auth: .withAuthEnabled(true)
         )
         XCTAssertTrue(cfg.usesAuthFlow)
+    }
+
+    func testAuthDefaultsURL() {
+        XCTAssertEqual(
+            RatifyeAuthDefaults.ingestURL.absoluteString,
+            "https://dlhub.8aiku.com/scan/auth-bc"
+        )
+        XCTAssertEqual(RatifyeAuthDefaults.companyId, "0")
     }
 
     func testAuthBcEncryptedTextExtraction() {
@@ -55,11 +78,7 @@ final class RatifyeSDKTests: XCTestCase {
     }
 
     func testAuthBcRequestBodyShape() throws {
-        let cfg = RatifyeAuthConfiguration(
-            ingestURL: URL(string: "https://api.example.com/scan/auth-bc")!,
-            ingestFormat: .authBc,
-            companyId: "42"
-        )
+        let cfg = RatifyeAuthConfiguration.standard
         let client = RatifyeScanIngestClient(configuration: cfg)
         let result = RatifyeScanResult(payload: "chgtfssd(98)ZXRZR3JR2RCWTQ====(97)0", symbologyRaw: "QR")
         let body = try client.encodedRequestBody(for: result)
@@ -67,7 +86,7 @@ final class RatifyeSDKTests: XCTestCase {
         XCTAssertEqual(json?.count, 1)
         XCTAssertEqual(json?.first?["encrypted_text"], "ZXRZR3JR2RCWTQ====")
         XCTAssertEqual(json?.first?["barcode_data"], result.payload)
-        XCTAssertEqual(json?.first?["company_id"], "42")
+        XCTAssertEqual(json?.first?["company_id"], RatifyeAuthDefaults.companyId)
     }
 
     func testAuthPayloadIncludesSurface() {

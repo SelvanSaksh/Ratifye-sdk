@@ -2,5 +2,5 @@ import Foundation
 
 /// Ratifye iOS SDK — single scan, authenticated scan, and multi-scan barcode capture.
 public enum RatifyeSDK {
-    public static let version = "1.2.1"
+    public static let version = "1.4.0"
 }

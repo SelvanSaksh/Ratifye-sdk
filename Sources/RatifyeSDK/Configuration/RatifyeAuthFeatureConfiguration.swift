@@ -14,10 +14,14 @@ public struct RatifyeAuthFeatureConfiguration: Sendable {
     }
 
     public var usesAuthFlow: Bool {
-        guard authScanEnabled,
-              let cfg = authConfiguration,
-              cfg.ingestURL != nil
-        else { return false }
-        return cfg.isAuthBcReady
+        authScanEnabled && authConfiguration != nil
+    }
+
+    /// Auth on/off only — uses SDK default ingest URL and `company_id` `"0"`.
+    public static func withAuthEnabled(_ enabled: Bool) -> RatifyeAuthFeatureConfiguration {
+        RatifyeAuthFeatureConfiguration(
+            authScanEnabled: enabled,
+            authConfiguration: enabled ? .standard : nil
+        )
     }
 }

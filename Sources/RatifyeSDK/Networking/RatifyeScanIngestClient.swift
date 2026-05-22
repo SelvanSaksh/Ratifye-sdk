@@ -2,7 +2,6 @@ import Foundation
 
 public enum RatifyeIngestError: Error, Sendable {
     case missingURL
-    case missingCompanyId
     case invalidResponse
     case httpStatus(Int, Data?)
     case bodyEncodingFailed
@@ -13,8 +12,6 @@ extension RatifyeIngestError: LocalizedError {
         switch self {
         case .missingURL:
             return "Ingest URL is not configured."
-        case .missingCompanyId:
-            return "company_id is required for auth ingest and must be provided by the app."
         case .invalidResponse:
             return "The server returned an invalid response."
         case .httpStatus(let code, _):
@@ -36,9 +33,7 @@ public struct RatifyeScanIngestClient: Sendable {
     }
 
     public func ingest(_ result: RatifyeScanResult) async throws -> (status: Int, data: Data) {
-        guard let url = configuration.ingestURL else { throw RatifyeIngestError.missingURL }
-
-        var request = URLRequest(url: url)
+        var request = URLRequest(url: configuration.ingestURL)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         applyDefaultHeaders(to: &request)
@@ -89,10 +84,8 @@ public struct RatifyeScanIngestClient: Sendable {
             return data
 
         case .authBc:
-            guard let companyId = configuration.companyId, !companyId.isEmpty else {
-                throw RatifyeIngestError.missingCompanyId
-            }
             let barcodeData = result.payload
+            let companyId = configuration.companyId
             let item: [String: String] = [
                 "encrypted_text": RatifyeBarcodeParsing.encryptedText(from: barcodeData),
                 "barcode_data": barcodeData,

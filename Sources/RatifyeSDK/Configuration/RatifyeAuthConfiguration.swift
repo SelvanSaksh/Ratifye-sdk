@@ -2,30 +2,26 @@ import Foundation
 
 /// JSON body shape for authenticated ingest.
 public enum RatifyeAuthIngestFormat: String, Sendable {
-    /// `POST` `[{ "encrypted_text", "barcode_data", "company_id" }]`
     case authBc = "auth_bc"
-    /// `POST` `{ "payload", "symbologyRaw" }` (legacy).
     case legacy = "legacy"
 }
 
-/// Credentials and backend used for authenticated scan flows. All values are supplied by the host app.
+/// Auth ingest settings. URL and `company_id` use SDK defaults unless overridden internally.
 public struct RatifyeAuthConfiguration: Sendable {
     public var bearerToken: String?
     public var apiKey: String?
-    /// Full ingest URL from your app config (not hardcoded in the SDK).
-    public var ingestURL: URL?
+    public var ingestURL: URL
     public var extraHTTPHeaders: [String: String]
     public var ingestFormat: RatifyeAuthIngestFormat
-    /// Required for `authBc` when auth ingest runs — set from your app/session.
-    public var companyId: String?
+    public var companyId: String
 
     public init(
         bearerToken: String? = nil,
         apiKey: String? = nil,
-        ingestURL: URL? = nil,
+        ingestURL: URL = RatifyeAuthDefaults.ingestURL,
         extraHTTPHeaders: [String: String] = [:],
         ingestFormat: RatifyeAuthIngestFormat = .authBc,
-        companyId: String? = nil
+        companyId: String = RatifyeAuthDefaults.companyId
     ) {
         self.bearerToken = bearerToken
         self.apiKey = apiKey
@@ -35,9 +31,8 @@ public struct RatifyeAuthConfiguration: Sendable {
         self.companyId = companyId
     }
 
-    public var isAuthBcReady: Bool {
-        guard ingestFormat == .authBc else { return true }
-        guard let companyId, !companyId.isEmpty else { return false }
-        return true
+    /// Default auth-bc configuration used when `authScanEnabled` is true.
+    public static var standard: RatifyeAuthConfiguration {
+        RatifyeAuthConfiguration()
     }
 }

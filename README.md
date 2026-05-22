@@ -19,12 +19,24 @@ Or in another `Package.swift`:
 
 ## Info.plist
 
-Add camera usage text:
-
 ```xml
 <key>NSCameraUsageDescription</key>
 <string>Camera is used to scan barcodes.</string>
+<key>NSPhotoLibraryUsageDescription</key>
+<string>Photo library is used to scan barcodes from images.</string>
 ```
+
+## Camera controls (built-in icons)
+
+Both `RatifyeSingleScanCameraView` and `RatifyeMultiScanCameraView` show a bottom toolbar with SF Symbol icons:
+
+| Icon | Action |
+|------|--------|
+| `bolt.fill` / `bolt.slash.fill` | Flash on/off (back camera only) |
+| `photo.on.rectangle.angled` | Pick image from gallery and scan barcodes |
+| `camera.rotate.fill` | Switch front / back camera |
+
+Set `showsCameraControls = false` to hide the toolbar (Swift). Gallery scans use the same auth/plain flow as live camera.
 
 ## Two camera surfaces (page-embedded)
 
@@ -40,17 +52,11 @@ Embedded views **do not** present modals or dismiss your screen. They emit `Rati
 ```swift
 cameraView.featureConfiguration = RatifyeScanFeatureConfiguration(
     singleScanEnabled: true,
-    authScanEnabled: true,
-    authConfiguration: RatifyeAuthConfiguration(
-        bearerToken: session.accessToken,
-        ingestURL: URL(string: appConfig.scanAuthURL)!,
-        companyId: session.companyId,
-        ingestFormat: .authBc
-    )
+    auth: .withAuthEnabled(true)
 )
 ```
 
-Auth ingest runs only when `authScanEnabled`, `ingestURL`, and (for `auth_bc`) `companyId` are all provided by your app. The SDK does not embed API URLs.
+When `authScanEnabled` is true, the SDK POSTs to the built-in auth endpoint (`RatifyeAuthDefaults.ingestURL`) with `company_id` `"0"`. The app only toggles auth and scan modes.
 
 ### Event payload (auth + parsing)
 
@@ -73,9 +79,7 @@ Authenticated ingest (`ingestFormat: auth_bc`) — body built from the scan + ap
 ]
 ```
 
-`ingestURL` must be the full URL from your environment or backend config.
-
-Legacy format (`ingestFormat: legacy`): `{ "payload", "symbologyRaw" }`.
+Auth URL is fixed in the SDK (`https://dlhub.8aiku.com/scan/auth-bc`). Legacy format (`ingestFormat: legacy`) is available for custom `RatifyeAuthConfiguration` only.
 
 Headers: `Content-Type: application/json`, `Accept: application/json, text/plain, */*`, optional `Authorization` / `X-API-Key`, plus `extraHTTPHeaders`.
 
@@ -141,33 +145,29 @@ Copy into your iOS app target:
 - `RatifyeRNAuthConfiguration.swift`
 - `RatifyeScanner.tsx` (into your JS app)
 
-**Single camera props:** `singleScanEnabled`, `authScanEnabled`, `ingestURL`, `companyId`, `ingestFormat`, `bearerToken`, `apiKey`, `extraHTTPHeaders`
+**Single camera props:** `singleScanEnabled`, `authScanEnabled` (camera controls with icons are always on in the native view)
 
-**Multi camera props:** `multiScanEnabled`, `authScanEnabled`, `ingestURL`, `companyId`, `ingestFormat`, `bearerToken`, `apiKey`, `extraHTTPHeaders` (same auth API as single)
+**Multi camera props:** `multiScanEnabled`, `authScanEnabled`
 
 **Event:** `onScanEvent` → same shape as `RatifyeScanEventPayload` (`kind`, `payload`, `symbologyRaw`, `auth.responseJSON`, etc.)
 
 ```tsx
-import Config from 'react-native-config'; // or your env / API layer
-import { RatifyeSingleScanCamera } from './RatifyeScanner';
+import { RatifyeSingleScanCamera, RatifyeMultiScanCamera } from './RatifyeScanner';
 
 <RatifyeSingleScanCamera
   style={{ flex: 1 }}
   singleScanEnabled={!useAuth}
   authScanEnabled={useAuth}
-  ingestURL={Config.SCAN_AUTH_URL}
-  companyId={session.companyId}
-  ingestFormat="auth_bc"
-  bearerToken={session.accessToken}
-  onScanEvent={(event) => {
-    if (event.kind === 'auth_success' || event.kind === 'single') {
-      setSheetVisible(true);
-    }
-  }}
+  onScanEvent={(event) => { /* auth_success | auth_failure | single */ }}
+/>
+
+<RatifyeMultiScanCamera
+  style={{ flex: 1 }}
+  multiScanEnabled
+  authScanEnabled={useAuth}
+  onScanEvent={(event) => { /* multi | auth_success | auth_failure */ }}
 />
 ```
-
-Never hardcode production API URLs in the SDK or sample components — pass them from your app at runtime.
 
 Show results in **your** `Modal` / bottom sheet — the SDK camera stays on the page.
 

@@ -14,30 +14,6 @@ final class RatifyeSingleScanNativeView: UIView, RatifyeSingleScanCameraViewDele
         didSet { applyConfiguration() }
     }
 
-    @objc var ingestURL: NSString? {
-        didSet { applyConfiguration() }
-    }
-
-    @objc var bearerToken: NSString? {
-        didSet { applyConfiguration() }
-    }
-
-    @objc var apiKey: NSString? {
-        didSet { applyConfiguration() }
-    }
-
-    @objc var companyId: NSString? {
-        didSet { applyConfiguration() }
-    }
-
-    @objc var ingestFormat: NSString? {
-        didSet { applyConfiguration() }
-    }
-
-    @objc var extraHTTPHeaders: NSDictionary? {
-        didSet { applyConfiguration() }
-    }
-
     @objc var onScanEvent: RCTDirectEventBlock?
 
     override init(frame: CGRect) {
@@ -60,18 +36,9 @@ final class RatifyeSingleScanNativeView: UIView, RatifyeSingleScanCameraViewDele
     }
 
     private func applyConfiguration() {
-        let auth = RatifyeRNAuthConfiguration.authFeature(
-            authScanEnabled: authScanEnabled,
-            ingestURL: ingestURL,
-            bearerToken: bearerToken,
-            apiKey: apiKey,
-            companyId: companyId,
-            ingestFormat: ingestFormat,
-            extraHTTPHeaders: extraHTTPHeaders
-        )
         cameraView.featureConfiguration = RatifyeScanFeatureConfiguration(
             singleScanEnabled: singleScanEnabled,
-            auth: auth
+            auth: RatifyeRNAuthConfiguration.authFeature(authScanEnabled: authScanEnabled)
         )
     }
 

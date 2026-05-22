@@ -14,7 +14,7 @@ public struct RatifyeScanFeatureConfiguration: Sendable {
         self.singleScanEnabled = singleScanEnabled
         self.auth = RatifyeAuthFeatureConfiguration(
             authScanEnabled: authScanEnabled,
-            authConfiguration: authConfiguration
+            authConfiguration: authScanEnabled ? (authConfiguration ?? .standard) : nil
         )
     }
 
@@ -53,7 +53,7 @@ public struct RatifyeMultiScanFeatureConfiguration: Sendable {
         self.multiScanEnabled = multiScanEnabled
         self.auth = RatifyeAuthFeatureConfiguration(
             authScanEnabled: authScanEnabled,
-            authConfiguration: authConfiguration
+            authConfiguration: authScanEnabled ? (authConfiguration ?? .standard) : nil
         )
     }
 

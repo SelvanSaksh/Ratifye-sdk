@@ -29,7 +29,8 @@ public final class RatifyeBarcodeCameraEngine: NSObject {
     public var multiRescanCooldown: TimeInterval = 0.6
 
     private var deviceInput: AVCaptureDeviceInput?
-    private var currentPosition: AVCaptureDevice.Position = .back
+    public private(set) var currentPosition: AVCaptureDevice.Position = .back
+    public private(set) var isTorchOn: Bool = false
     private var isSingleFinished = false
     private var lastEmittedAt: [String: Date] = [:]
     private var isProcessingFrame = false
@@ -89,14 +90,41 @@ public final class RatifyeBarcodeCameraEngine: NSObject {
         layer.videoGravity = .resizeAspectFill
     }
 
+    public var isTorchAvailable: Bool {
+        guard let device = deviceInput?.device else { return false }
+        return device.hasTorch && currentPosition == .back
+    }
+
     public func setTorch(on: Bool) {
         guard let device = deviceInput?.device,
               device.hasTorch,
-              device.position == .back
-        else { return }
+              currentPosition == .back
+        else {
+            isTorchOn = false
+            return
+        }
         try? device.lockForConfiguration()
         device.torchMode = on ? .on : .off
         device.unlockForConfiguration()
+        isTorchOn = on && device.torchMode == .on
+    }
+
+    @discardableResult
+    public func toggleTorch() -> Bool {
+        guard isTorchAvailable else {
+            setTorch(on: false)
+            return false
+        }
+        setTorch(on: !isTorchOn)
+        return isTorchOn
+    }
+
+    public func toggleCamera() throws {
+        let next: AVCaptureDevice.Position = currentPosition == .back ? .front : .back
+        try switchCamera(to: next)
+        if next == .front {
+            setTorch(on: false)
+        }
     }
 
     public func setZoom(_ factor: CGFloat) {

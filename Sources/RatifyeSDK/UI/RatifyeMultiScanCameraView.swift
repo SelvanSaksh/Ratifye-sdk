@@ -17,10 +17,16 @@ public final class RatifyeMultiScanCameraView: UIView {
 
     public var presentationMode: RatifyeCameraPresentationMode = .embedded
     public var showsDoneButton: Bool = false
+    public var showsCameraControls: Bool = true {
+        didSet { controlsView.isHidden = !showsCameraControls }
+    }
 
     private let engine = RatifyeBarcodeCameraEngine()
     private let previewLayer = AVCaptureVideoPreviewLayer()
     private let authCoordinator = RatifyeAuthScanCoordinator()
+    private let controlsView = RatifyeCameraControlsView()
+    private let galleryPicker = RatifyeGalleryPickerPresenter()
+    private var scanDispatcher: RatifyeCameraScanDispatcher?
     private var doneButton: UIButton?
 
     public override init(frame: CGRect) {
@@ -40,6 +46,23 @@ public final class RatifyeMultiScanCameraView: UIView {
         previewLayer.videoGravity = .resizeAspectFill
         layer.insertSublayer(previewLayer, at: 0)
         engine.attachPreview(to: previewLayer)
+
+        controlsView.delegate = self
+        controlsView.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(controlsView)
+        NSLayoutConstraint.activate([
+            controlsView.centerXAnchor.constraint(equalTo: centerXAnchor),
+            controlsView.bottomAnchor.constraint(equalTo: safeAreaLayoutGuide.bottomAnchor, constant: -20)
+        ])
+        updateFlashControl()
+
+        galleryPicker.onImagePicked = { [weak self] image in
+            self?.handleGalleryImage(image)
+        }
+
+        Task { @MainActor in
+            self.rebuildDispatcher()
+        }
     }
 
     public override func layoutSubviews() {
@@ -64,6 +87,7 @@ public final class RatifyeMultiScanCameraView: UIView {
         do {
             try engine.configureIfNeeded()
             engine.startRunning()
+            updateFlashControl()
         } catch {
             delegate?.ratifyeMultiScanCameraView(self, cameraDidFail: error)
         }
@@ -76,12 +100,27 @@ public final class RatifyeMultiScanCameraView: UIView {
     private func applyFeatureConfiguration() {
         Task { @MainActor in
             authCoordinator.update(configuration: featureConfiguration.auth)
+            rebuildDispatcher()
         }
         if window != nil {
             startCameraIfEnabled()
         } else if !featureConfiguration.multiScanEnabled {
             engine.stopRunning()
         }
+    }
+
+    @MainActor
+    private func rebuildDispatcher() {
+        scanDispatcher = RatifyeCameraScanDispatcher(
+            surface: .multi,
+            authCoordinator: authCoordinator,
+            usesAuthFlow: featureConfiguration.usesAuthFlow,
+            plainScanEnabled: featureConfiguration.multiScanEnabled,
+            emit: { [weak self] event in
+                guard let self else { return }
+                self.delegate?.ratifyeMultiScanCameraView(self, didEmit: event)
+            }
+        )
     }
 
     public func configureChrome() {
@@ -107,22 +146,16 @@ public final class RatifyeMultiScanCameraView: UIView {
         delegate?.ratifyeMultiScanCameraViewDidRequestFinish(self)
     }
 
-    private func emit(_ event: RatifyeScanEventPayload) {
-        delegate?.ratifyeMultiScanCameraView(self, didEmit: event)
+    private func updateFlashControl() {
+        controlsView.setFlashOn(engine.isTorchOn, available: engine.isTorchAvailable)
     }
 
     @MainActor
-    private func handleScan(_ result: RatifyeScanResult) {
-        guard featureConfiguration.multiScanEnabled else { return }
-
-        if featureConfiguration.usesAuthFlow {
-            guard authCoordinator.canRunAuth, !authCoordinator.isBusy else { return }
-            authCoordinator.ingest(result) { [weak self] event in
-                self?.emit(event)
-            }
-        } else {
-            emit(.multi(result))
-        }
+    private func handleGalleryImage(_ image: UIImage) {
+        let results = RatifyeBarcodeImageScanner.scan(image)
+        guard !results.isEmpty else { return }
+        if scanDispatcher == nil { rebuildDispatcher() }
+        scanDispatcher?.dispatchGalleryResults(results)
     }
 }
 
@@ -130,7 +163,28 @@ extension RatifyeMultiScanCameraView: RatifyeBarcodeCameraEngineDelegate {
     public func ratifyeEngine(_ engine: RatifyeBarcodeCameraEngine, didOutput result: RatifyeScanResult) {
         guard featureConfiguration.multiScanEnabled else { return }
         Task { @MainActor in
-            handleScan(result)
+            if scanDispatcher == nil { rebuildDispatcher() }
+            scanDispatcher?.dispatch(result)
         }
+    }
+}
+
+extension RatifyeMultiScanCameraView: RatifyeCameraControlsViewDelegate {
+    func cameraControlsDidTapSwitchCamera(_ controls: RatifyeCameraControlsView) {
+        do {
+            try engine.toggleCamera()
+            updateFlashControl()
+        } catch {
+            delegate?.ratifyeMultiScanCameraView(self, cameraDidFail: error)
+        }
+    }
+
+    func cameraControlsDidTapFlash(_ controls: RatifyeCameraControlsView) {
+        _ = engine.toggleTorch()
+        updateFlashControl()
+    }
+
+    func cameraControlsDidTapGallery(_ controls: RatifyeCameraControlsView) {
+        galleryPicker.present(from: self)
     }
 }

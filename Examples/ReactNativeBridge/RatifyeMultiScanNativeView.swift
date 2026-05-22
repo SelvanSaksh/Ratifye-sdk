@@ -14,30 +14,6 @@ final class RatifyeMultiScanNativeView: UIView, RatifyeMultiScanCameraViewDelega
         didSet { applyConfiguration() }
     }
 
-    @objc var ingestURL: NSString? {
-        didSet { applyConfiguration() }
-    }
-
-    @objc var bearerToken: NSString? {
-        didSet { applyConfiguration() }
-    }
-
-    @objc var apiKey: NSString? {
-        didSet { applyConfiguration() }
-    }
-
-    @objc var companyId: NSString? {
-        didSet { applyConfiguration() }
-    }
-
-    @objc var ingestFormat: NSString? {
-        didSet { applyConfiguration() }
-    }
-
-    @objc var extraHTTPHeaders: NSDictionary? {
-        didSet { applyConfiguration() }
-    }
-
     @objc var onScanEvent: RCTDirectEventBlock?
 
     override init(frame: CGRect) {
@@ -60,18 +36,9 @@ final class RatifyeMultiScanNativeView: UIView, RatifyeMultiScanCameraViewDelega
     }
 
     private func applyConfiguration() {
-        let auth = RatifyeRNAuthConfiguration.authFeature(
-            authScanEnabled: authScanEnabled,
-            ingestURL: ingestURL,
-            bearerToken: bearerToken,
-            apiKey: apiKey,
-            companyId: companyId,
-            ingestFormat: ingestFormat,
-            extraHTTPHeaders: extraHTTPHeaders
-        )
         cameraView.featureConfiguration = RatifyeMultiScanFeatureConfiguration(
             multiScanEnabled: multiScanEnabled,
-            auth: auth
+            auth: RatifyeRNAuthConfiguration.authFeature(authScanEnabled: authScanEnabled)
         )
     }
 
@@ -88,9 +55,7 @@ final class RatifyeMultiScanNativeView: UIView, RatifyeMultiScanCameraViewDelega
         ])
     }
 
-    func ratifyeMultiScanCameraViewDidRequestFinish(_ view: RatifyeMultiScanCameraView) {
-        // Embedded multi scan has no Done button; reserved for modal UIKit hosts.
-    }
+    func ratifyeMultiScanCameraViewDidRequestFinish(_ view: RatifyeMultiScanCameraView) {}
 }
 
 @objc(RatifyeMultiScanViewManager)
