@@ -26,53 +26,70 @@ Add camera usage text:
 <string>Camera is used to scan barcodes.</string>
 ```
 
-## Swift (UIKit)
+## Two camera surfaces (page-embedded)
+
+| Surface | Swift type | Modes |
+|--------|------------|--------|
+| **Single camera** | `RatifyeSingleScanCameraView` | Plain single scan and/or authenticated ingest (enable via `RatifyeScanFeatureConfiguration`) |
+| **Multi camera** | `RatifyeMultiScanCameraView` | Continuous multi scan (`multiScanEnabled`) |
+
+Embedded views **do not** present modals or dismiss your screen. They emit `RatifyeScanEventPayload` so your app can show sheets/popups.
+
+### Feature flags (single camera)
 
 ```swift
-import RatifyeSDK
-
-final class MyCoordinator: RatifyeSingleScanViewControllerDelegate {
-    func presentScan(from host: UIViewController) {
-        let vc = RatifyeSingleScanViewController()
-        vc.scanDelegate = self
-        vc.modalPresentationStyle = .fullScreen
-        host.present(vc, animated: true)
-    }
-
-    func ratifyeSingleScan(_ controller: RatifyeSingleScanViewController, didFinishWith result: RatifyeScanResult) {
-        print(result.payload, result.symbologyRaw)
-    }
-
-    func ratifyeSingleScanDidCancel(_ controller: RatifyeSingleScanViewController) {}
-}
+cameraView.featureConfiguration = RatifyeScanFeatureConfiguration(
+    singleScanEnabled: true,
+    authScanEnabled: true,
+    authConfiguration: RatifyeAuthConfiguration(
+        bearerToken: token,
+        ingestURL: URL(string: "https://api.example.com/v1/scans")!
+    )
+)
 ```
 
-### Multi scan
+When `authScanEnabled` and `ingestURL` are set, **auth ingest runs** (SDK `POST`). Otherwise, if `singleScanEnabled`, plain barcode events are emitted.
 
-Use `RatifyeMultiScanViewController` and `RatifyeMultiScanViewControllerDelegate`. Each new payload is reported on the main thread (repeats of the same value are throttled by the engine’s `multiRescanCooldown`).
+### Event payload (auth + parsing)
 
-### Authenticated single scan
+All flows use `RatifyeScanEventPayload.toDictionary()`:
 
-Point `ingestURL` at your API. The SDK sends `POST` JSON:
+- `kind`: `single` | `auth_success` | `auth_failure` | `multi`
+- `surface`: `single` | `multi` (which camera emitted the event)
+- `payload`, `symbologyRaw`, `scan`
+- `auth` (authenticated flows): `httpStatus`, `responseBody`, `responseJSON` (parsed when valid JSON), `errorCode`, `errorMessage` on failure
+
+Authenticated ingest `POST` body:
 
 ```json
 { "payload": "<string>", "symbologyRaw": "<Vision symbology string>" }
 ```
 
-Headers:
+Headers: `Authorization: Bearer …`, `X-API-Key`, plus `extraHTTPHeaders`.
 
-- `Authorization: Bearer <token>` if `bearerToken` is set  
-- `X-API-Key: <key>` if `apiKey` is set  
-- Any `extraHTTPHeaders` you provide  
+### Swift (UIKit page)
 
 ```swift
-let cfg = RatifyeAuthConfiguration(
-    bearerToken: token,
-    ingestURL: URL(string: "https://api.example.com/v1/scans")!
-)
-let vc = RatifyeAuthScanViewController(configuration: cfg)
-vc.scanDelegate = self
+let camera = RatifyeSingleScanCameraView(frame: container.bounds)
+camera.presentationMode = .embedded
+camera.featureConfiguration = RatifyeScanFeatureConfiguration(singleScanEnabled: true)
+camera.delegate = self
+container.addSubview(camera)
 ```
+
+### Swift (modal, optional)
+
+```swift
+let vc = RatifyeSingleScanViewController()
+vc.presentationMode = .modal
+vc.featureConfiguration = ...
+vc.scanDelegate = self
+host.present(vc, animated: true)
+```
+
+### Multi scan
+
+`RatifyeMultiScanCameraView` with `RatifyeMultiScanFeatureConfiguration(multiScanEnabled: true, authScanEnabled: ..., authConfiguration: ...)`. Same auth ingest and `auth_success` / `auth_failure` events as single. Plain multi emits `kind: multi` when auth is off. Duplicate payloads are throttled by `multiRescanCooldown` on the engine.
 
 ## Publish for public access
 
@@ -103,21 +120,39 @@ React Native does not consume Swift packages directly. You add the SDK to the **
 
 If you use Expo: create a **config plugin** or use a **development build** (EAS) so you can edit the native `Podfile` / Xcode project and add the SPM dependency. Managed Expo without custom native code cannot load this SDK until you eject or use a dev client.
 
-### 3. Native module
+### 3. Native views (page-embedded, not modal scanner)
 
-Copy `Examples/ReactNativeBridge/RatifyeScanModule.swift` and `RatifyeScanModule.m` into your iOS app target. Add both files to the target, ensure **Swift** sees `import React`, and that the bridging header (if any) does not conflict.
+Copy into your iOS app target:
 
-The module exposes:
+- `RatifyeSingleScanNativeView.swift` + `RatifyeSingleScanNativeView.m`
+- `RatifyeMultiScanNativeView.swift` + `RatifyeMultiScanNativeView.m`
+- `RatifyeRNAuthConfiguration.swift`
+- `RatifyeScanner.tsx` (into your JS app)
 
-```ts
-import { NativeModules } from 'react-native';
-const { RatifyeScan } = NativeModules;
+**Single camera props:** `singleScanEnabled`, `authScanEnabled`, `ingestURL`, `bearerToken`, `apiKey`, `extraHTTPHeaders`
 
-const result = await RatifyeScan.scan();
-// result: { payload: string; symbologyRaw: string }
+**Multi camera props:** `multiScanEnabled`, `authScanEnabled`, `ingestURL`, `bearerToken`, `apiKey`, `extraHTTPHeaders` (same auth API as single)
+
+**Event:** `onScanEvent` → same shape as `RatifyeScanEventPayload` (`kind`, `payload`, `symbologyRaw`, `auth.responseJSON`, etc.)
+
+```tsx
+import { RatifyeSingleScanCamera } from './RatifyeScanner';
+
+<RatifyeSingleScanCamera
+  style={{ flex: 1 }}
+  singleScanEnabled={!useAuth}
+  authScanEnabled={useAuth}
+  ingestURL="https://api.example.com/v1/scans"
+  bearerToken={token}
+  onScanEvent={(event) => {
+    if (event.kind === 'auth_success' || event.kind === 'single') {
+      setSheetVisible(true);
+    }
+  }}
+/>
 ```
 
-Use the same pattern for **multi scan** (`RCTEventEmitter` + `RatifyeMultiScanViewController`) or **auth scan** (construct `RatifyeAuthScanViewController` with `RatifyeAuthConfiguration` built from JS arguments).
+Show results in **your** `Modal` / bottom sheet — the SDK camera stays on the page.
 
 ### 4. Autolinking
 

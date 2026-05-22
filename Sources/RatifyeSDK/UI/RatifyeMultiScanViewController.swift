@@ -1,74 +1,72 @@
 import UIKit
-import AVFoundation
 
 public protocol RatifyeMultiScanViewControllerDelegate: AnyObject {
-    func ratifyeMultiScan(_ controller: RatifyeMultiScanViewController, didScan result: RatifyeScanResult)
+    func ratifyeMultiScan(_ controller: RatifyeMultiScanViewController, didEmit event: RatifyeScanEventPayload)
     func ratifyeMultiScanDidFinish(_ controller: RatifyeMultiScanViewController)
 }
 
-/// Continuous scanning; duplicate payloads are throttled by the engine cooldown.
+/// Full-screen host for `RatifyeMultiScanCameraView`. Use `.embedded` when placing inside your layout (no auto-dismiss).
 open class RatifyeMultiScanViewController: UIViewController {
     public weak var scanDelegate: RatifyeMultiScanViewControllerDelegate?
 
-    private let engine = RatifyeBarcodeCameraEngine()
-    private let previewLayer = AVCaptureVideoPreviewLayer()
+    public let cameraView = RatifyeMultiScanCameraView()
 
-    public var showsDoneButton: Bool = true
+    public var featureConfiguration: RatifyeMultiScanFeatureConfiguration {
+        get { cameraView.featureConfiguration }
+        set { cameraView.featureConfiguration = newValue }
+    }
+
+    public var presentationMode: RatifyeCameraPresentationMode = .modal {
+        didSet {
+            cameraView.presentationMode = presentationMode
+            cameraView.showsDoneButton = presentationMode == .modal
+            cameraView.configureChrome()
+        }
+    }
 
     public override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .black
-        engine.scanMode = .multi
-        engine.delegate = self
-        previewLayer.frame = view.bounds
-        view.layer.insertSublayer(previewLayer, at: 0)
-        engine.attachPreview(to: previewLayer)
-
-        do {
-            try engine.configureIfNeeded()
-        } catch {
-            dismiss(animated: true)
-            return
-        }
-
-        if showsDoneButton {
-            let b = UIButton(type: .system)
-            b.setTitle("Done", for: .normal)
-            b.setTitleColor(.white, for: .normal)
-            b.addTarget(self, action: #selector(doneTapped), for: .touchUpInside)
-            b.translatesAutoresizingMaskIntoConstraints = false
-            view.addSubview(b)
-            NSLayoutConstraint.activate([
-                b.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
-                b.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16)
-            ])
-        }
+        cameraView.presentationMode = presentationMode
+        cameraView.showsDoneButton = presentationMode == .modal
+        cameraView.delegate = self
+        cameraView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(cameraView)
+        NSLayoutConstraint.activate([
+            cameraView.topAnchor.constraint(equalTo: view.topAnchor),
+            cameraView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            cameraView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            cameraView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
+        cameraView.configureChrome()
     }
 
     public override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        engine.startRunning()
+        cameraView.startCameraIfEnabled()
     }
 
     public override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
-        engine.stopRunning()
-    }
-
-    public override func viewDidLayoutSubviews() {
-        super.viewDidLayoutSubviews()
-        previewLayer.frame = view.bounds
-    }
-
-    @objc private func doneTapped() {
-        engine.stopRunning()
-        scanDelegate?.ratifyeMultiScanDidFinish(self)
-        dismiss(animated: true)
+        cameraView.stopCamera()
     }
 }
 
-extension RatifyeMultiScanViewController: RatifyeBarcodeCameraEngineDelegate {
-    public func ratifyeEngine(_ engine: RatifyeBarcodeCameraEngine, didOutput result: RatifyeScanResult) {
-        scanDelegate?.ratifyeMultiScan(self, didScan: result)
+extension RatifyeMultiScanViewController: RatifyeMultiScanCameraViewDelegate {
+    public func ratifyeMultiScanCameraView(_ view: RatifyeMultiScanCameraView, didEmit event: RatifyeScanEventPayload) {
+        scanDelegate?.ratifyeMultiScan(self, didEmit: event)
+    }
+
+    public func ratifyeMultiScanCameraView(_ view: RatifyeMultiScanCameraView, cameraDidFail error: Error) {
+        if presentationMode == .modal {
+            dismiss(animated: true)
+        }
+    }
+
+    public func ratifyeMultiScanCameraViewDidRequestFinish(_ view: RatifyeMultiScanCameraView) {
+        scanDelegate?.ratifyeMultiScanDidFinish(self)
+        if presentationMode == .modal {
+            dismiss(animated: true)
+        }
     }
 }

@@ -6,6 +6,19 @@ public enum RatifyeIngestError: Error, Sendable {
     case httpStatus(Int, Data?)
 }
 
+extension RatifyeIngestError: LocalizedError {
+    public var errorDescription: String? {
+        switch self {
+        case .missingURL:
+            return "Ingest URL is not configured."
+        case .invalidResponse:
+            return "The server returned an invalid response."
+        case .httpStatus(let code, _):
+            return "Ingest failed with HTTP status \(code)."
+        }
+    }
+}
+
 /// Posts scan results to your API using the auth configuration.
 public struct RatifyeScanIngestClient: Sendable {
     public var configuration: RatifyeAuthConfiguration

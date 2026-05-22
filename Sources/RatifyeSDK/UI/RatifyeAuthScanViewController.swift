@@ -1,25 +1,32 @@
 import UIKit
-import AVFoundation
 
 public protocol RatifyeAuthScanViewControllerDelegate: AnyObject {
-    /// Called after a successful server ingest (2xx).
-    func ratifyeAuthScan(_ controller: RatifyeAuthScanViewController, didValidate result: RatifyeScanResult, serverData: Data)
-    func ratifyeAuthScan(_ controller: RatifyeAuthScanViewController, didFailIngest error: Error, for result: RatifyeScanResult)
+    func ratifyeAuthScan(_ controller: RatifyeAuthScanViewController, didEmit event: RatifyeScanEventPayload)
     func ratifyeAuthScanDidCancel(_ controller: RatifyeAuthScanViewController)
 }
 
-/// Single scan that POSTs the payload to your API using `RatifyeAuthConfiguration`.
+/// Authenticated single scan host. Prefer `RatifyeSingleScanCameraView` with `authScanEnabled` for page embedding.
 open class RatifyeAuthScanViewController: UIViewController {
     public weak var scanDelegate: RatifyeAuthScanViewControllerDelegate?
 
-    private let engine = RatifyeBarcodeCameraEngine()
-    private let previewLayer = AVCaptureVideoPreviewLayer()
-    private let ingestClient: RatifyeScanIngestClient
-    private var isAwaitingIngest = false
+    public let cameraView = RatifyeSingleScanCameraView()
 
-    public init(configuration: RatifyeAuthConfiguration) {
-        self.ingestClient = RatifyeScanIngestClient(configuration: configuration)
+    public var presentationMode: RatifyeCameraPresentationMode = .modal {
+        didSet {
+            cameraView.presentationMode = presentationMode
+            cameraView.showsCloseButton = presentationMode == .modal
+            cameraView.configureChrome()
+        }
+    }
+
+    public init(configuration: RatifyeAuthConfiguration, presentationMode: RatifyeCameraPresentationMode = .modal) {
+        self.presentationMode = presentationMode
         super.init(nibName: nil, bundle: nil)
+        cameraView.featureConfiguration = RatifyeScanFeatureConfiguration(
+            singleScanEnabled: false,
+            authScanEnabled: true,
+            authConfiguration: configuration
+        )
     }
 
     @available(*, unavailable)
@@ -30,68 +37,42 @@ open class RatifyeAuthScanViewController: UIViewController {
     public override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .black
-        engine.scanMode = .single
-        engine.delegate = self
-        previewLayer.frame = view.bounds
-        view.layer.insertSublayer(previewLayer, at: 0)
-        engine.attachPreview(to: previewLayer)
-
-        do {
-            try engine.configureIfNeeded()
-        } catch {
-            dismiss(animated: true)
-            return
-        }
-
-        let b = UIButton(type: .system)
-        b.setTitle("Close", for: .normal)
-        b.setTitleColor(.white, for: .normal)
-        b.addTarget(self, action: #selector(closeTapped), for: .touchUpInside)
-        b.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(b)
+        cameraView.presentationMode = presentationMode
+        cameraView.showsCloseButton = presentationMode == .modal
+        cameraView.delegate = self
+        cameraView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(cameraView)
         NSLayoutConstraint.activate([
-            b.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
-            b.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16)
+            cameraView.topAnchor.constraint(equalTo: view.topAnchor),
+            cameraView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            cameraView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            cameraView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
+        cameraView.configureChrome()
     }
 
     public override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        engine.startRunning()
+        cameraView.startCameraIfEnabled()
     }
 
     public override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
-        engine.stopRunning()
-    }
-
-    public override func viewDidLayoutSubviews() {
-        super.viewDidLayoutSubviews()
-        previewLayer.frame = view.bounds
-    }
-
-    @objc private func closeTapped() {
-        scanDelegate?.ratifyeAuthScanDidCancel(self)
-        dismiss(animated: true)
+        cameraView.stopCamera()
     }
 }
 
-extension RatifyeAuthScanViewController: RatifyeBarcodeCameraEngineDelegate {
-    public func ratifyeEngine(_ engine: RatifyeBarcodeCameraEngine, didOutput result: RatifyeScanResult) {
-        guard !isAwaitingIngest else { return }
-        isAwaitingIngest = true
+extension RatifyeAuthScanViewController: RatifyeSingleScanCameraViewDelegate {
+    public func ratifyeSingleScanCameraView(_ view: RatifyeSingleScanCameraView, didEmit event: RatifyeScanEventPayload) {
+        scanDelegate?.ratifyeAuthScan(self, didEmit: event)
+        if presentationMode == .modal, case .authSuccess = event {
+            dismiss(animated: true)
+        }
+    }
 
-        Task { @MainActor in
-            defer { self.isAwaitingIngest = false }
-            do {
-                let (_, data) = try await ingestClient.ingest(result)
-                self.scanDelegate?.ratifyeAuthScan(self, didValidate: result, serverData: data)
-                self.dismiss(animated: true)
-            } catch {
-                self.engine.resetSingleScanLock()
-                self.engine.startRunning()
-                self.scanDelegate?.ratifyeAuthScan(self, didFailIngest: error, for: result)
-            }
+    public func ratifyeSingleScanCameraView(_ view: RatifyeSingleScanCameraView, cameraDidFail error: Error) {
+        if presentationMode == .modal {
+            dismiss(animated: true)
         }
     }
 }
