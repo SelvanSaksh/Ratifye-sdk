@@ -84,13 +84,8 @@ public struct RatifyeScanIngestClient: Sendable {
             return data
 
         case .authBc:
-            let barcodeData = result.payload
-            let companyId = configuration.companyId
-            let item: [String: String] = [
-                "encrypted_text": RatifyeBarcodeParsing.encryptedText(from: barcodeData),
-                "barcode_data": barcodeData,
-                "company_id": companyId
-            ]
+            let parsed = RatifyeBarcodeParsing.parse(result.payload)
+            let item = parsed.toAuthDictionary()
             guard let data = try? JSONSerialization.data(withJSONObject: [item]) else {
                 throw RatifyeIngestError.bodyEncodingFailed
             }

@@ -15,11 +15,24 @@ export type RatifyeScanEventKind =
   | 'multi'
   | 'camera_error';
 
+export type RatifyeParsedBarcode = {
+  barcode_data: string;
+  encrypted_text: string;
+  company_id: string;
+};
+
 export type RatifyeScanEvent = {
   kind: RatifyeScanEventKind;
   surface?: RatifyeScanSurface;
+  /** Raw scanner string (includes GS1 segments). */
   payload?: string;
   symbologyRaw?: string;
+  /** Base URL without `(98)…(97)…` segments. */
+  barcode_data?: string;
+  encrypted_text?: string;
+  /** Taken from value after `(97)` in the barcode. */
+  company_id?: string;
+  parsed?: RatifyeParsedBarcode;
   scan?: { payload: string; symbologyRaw: string };
   auth?: {
     success?: boolean;

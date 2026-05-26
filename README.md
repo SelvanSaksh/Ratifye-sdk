@@ -72,12 +72,15 @@ Authenticated ingest (`ingestFormat: auth_bc`) — body built from the scan + ap
 ```json
 [
   {
-    "encrypted_text": "<extracted from (98)…(97) in barcode, or full payload>",
-    "barcode_data": "<full scanned string>",
-    "company_id": "<from app>"
+    "barcode_data": "https://dl.ratifye.ai/01/18907001962025?13=260404&15=270404&17=270505",
+    "encrypted_text": "CLTPH2PNBRHJUA====",
+    "company_id": "48"
   }
 ]
 ```
+
+From a scan like  
+`https://dl.ratifye.ai/01/…(98)CLTPH2PNBRHJUA====(97)48` the SDK strips `(98)…(97)…` from `barcode_data`, puts the middle segment in `encrypted_text`, and uses the suffix after `(97)` as `company_id`. The same fields are returned to the app in `onScanEvent` (`barcode_data`, `encrypted_text`, `company_id`, plus `parsed`).
 
 Auth URL is fixed in the SDK (`https://dlhub.8aiku.com/scan/auth-bc`). Legacy format (`ingestFormat: legacy`) is available for custom `RatifyeAuthConfiguration` only.
 

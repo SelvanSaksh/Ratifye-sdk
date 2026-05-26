@@ -50,13 +50,19 @@ public enum RatifyeScanEventPayload: Sendable {
         surface: RatifyeScanSurface,
         scan: RatifyeScanResult
     ) -> [String: Any] {
-        [
+        let parsed = RatifyeBarcodeParsing.parse(scan.payload)
+        var d: [String: Any] = [
             "kind": kind.rawValue,
             "surface": surface.rawValue,
             "payload": scan.payload,
             "symbologyRaw": scan.symbologyRaw,
+            "barcode_data": parsed.barcodeData,
+            "encrypted_text": parsed.encryptedText,
+            "company_id": parsed.companyId,
             "scan": scan.toDictionary()
         ]
+        d["parsed"] = parsed.toAuthDictionary()
+        return d
     }
 
     private static func authSuccessDictionary(_ success: RatifyeAuthScanSuccess) -> [String: Any] {

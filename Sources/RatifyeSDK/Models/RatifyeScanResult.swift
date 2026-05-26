@@ -13,6 +13,10 @@ public struct RatifyeScanResult: Sendable, Hashable {
 }
 
 extension RatifyeScanResult {
+    public var parsed: RatifyeParsedBarcode {
+        RatifyeBarcodeParsing.parse(payload)
+    }
+
     static func from(_ observation: VNBarcodeObservation) -> RatifyeScanResult? {
         guard let payload = observation.payloadStringValue else { return nil }
         let raw = observation.symbology.rawValue
